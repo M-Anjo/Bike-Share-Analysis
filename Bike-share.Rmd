@@ -1,0 +1,230 @@
+---
+title: "Bike-Share-Analysis"
+author: "Miguel C. Anjo"
+date: "2022-11-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Task Description
+
+  The company wants to create marketing strategies to convert casual users in to annual members.  
+  In order to realise this task, there are 3 main questions that need to be solved.  
+    
+  - How the casual users and the annual members use the bikes in different ways?  
+  - Why would the casual users want to get the annual plan?  
+  - How can the company use social medias to influence the users to become          annual members?  
+    
+## Data Description   
+
+  The data available are trip data from the past 12 months, from November/2021 until October/2022. The detailed view of the data structure will be further on this notebook.
+  
+## Preparing The Data  
+
+  First off all, we'll need to load all the data we need.  
+  
+```{r}
+library(tidyverse)
+
+biketrips_2021_11 <- read.csv("~/202111-divvy-tripdata.csv")
+biketrips_2021_12 <- read.csv("~/202112-divvy-tripdata.csv")
+biketrips_2022_01 <- read.csv("~/202201-divvy-tripdata.csv")
+biketrips_2022_02 <- read.csv("~/202202-divvy-tripdata.csv")
+biketrips_2022_03 <- read.csv("~/202203-divvy-tripdata.csv")
+biketrips_2022_04 <- read.csv("~/202204-divvy-tripdata.csv")
+biketrips_2022_05 <- read.csv("~/202205-divvy-tripdata.csv")
+biketrips_2022_06 <- read.csv("~/202206-divvy-tripdata.csv")
+biketrips_2022_07 <- read.csv("~/202207-divvy-tripdata.csv")
+biketrips_2022_08 <- read.csv("~/202208-divvy-tripdata.csv")
+biketrips_2022_09 <- read.csv("~/202209-divvy-tripdata.csv")
+biketrips_2022_10 <- read.csv("~/202210-divvy-tripdata.csv")
+
+```
+  
+  Now all the separated data must be merged in to only one data frame.
+  
+```{r}
+bike_trips_df <- bind_rows(biketrips_2021_11, biketrips_2021_12, biketrips_2022_01, biketrips_2022_02, biketrips_2022_03, biketrips_2022_04, biketrips_2022_05, biketrips_2022_06, biketrips_2022_07, biketrips_2022_08, biketrips_2022_09, biketrips_2022_10,)
+```
+
+  let's take a look at the data structure to know better our data.
+  
+```{r}
+print("----structure----")
+str(bike_trips_df)
+print("----glimpse----")
+glimpse(bike_trips_df)
+
+```
+
+  Just with a little glimpse of the data, we can see that are n/a values that need to be treated and columns that need to be changed in to another format.  
+  Before process the data, we should first know what we'll be needed, in order to answer the first question, the difference in behavior between the two types of users must be exposed.  
+  Taking a peak at the data available we can see what can be used for answer that question, like the difference in mean time per ride between the types of users,  
+  the rides throughout the day, the preference type of bike and the days of week users ride. Much more could be looked at, but in this case study, I'll not dive too deep.  
+  In the codes ahead, we'll transform and make the data that will be necessary to this comparisons.   
+  
+  
+
+## Processing the Data
+
+  First, lets remove all rows with missing values.
+
+```{r}
+bike_trips_df_clean <- drop_na(bike_trips_df)
+```
+
+  Now, let's format and create columns.
+  
+```{r}
+#format the started_at column from char to date.
+
+bike_trips_df_clean$date <- as.Date(bike_trips_df_clean$started_at)
+```
+
+```{r}
+#Create new columns to separate the year, month, day of month, day of week and ride duration.
+
+bike_trips_df_clean$year <- format(as.Date(bike_trips_df_clean$started_at), "%Y")
+bike_trips_df_clean$month <- format(as.Date(bike_trips_df_clean$started_at),"%m")
+bike_trips_df_clean$day_of_month <- format(as.Date(bike_trips_df_clean$started_at), "%d")
+bike_trips_df_clean$day_of_week <- format(as.Date(bike_trips_df_clean$started_at), "%a")
+bike_trips_df_clean$ride_duration <- difftime(format(bike_trips_df_clean$ended_at, format = "%H:%M:%S"), format(bike_trips_df_clean$started_at, format = "%H:%M:%S"), units="mins")
+```
+```{r}
+bike_trips_df_clean$ride_duration <- round(bike_trips_df_clean$ride_duration, 2)
+```
+```{r}
+bike_trips_df_clean$day_of_week <- ordered(bike_trips_df_clean$day_of_week, levels = c("seg", "ter", "qua", "qui", "sex", "sáb", "dom"))
+```
+
+  Now that the data necessary is ready, it's time to begin the analysis.
+  
+## Data Analysis
+
+  The objective here is to see those comparisons through plots in order to understand the main differences between the two types of users.  
+  
+```{r}
+#calculating the mean time of the rides.
+
+users_types_mean_duration <- bike_trips_df_clean %>% 
+  group_by(member_casual) %>% 
+  summarise(mean_duration = mean(ride_duration))
+
+#creating the (mean duration X user type) plot
+
+mean_duration_plot <- ggplot(users_types_mean_duration)+
+  geom_col(mapping = aes(x=member_casual, y = mean_duration, fill = member_casual))+
+  labs(title = "Mean ride duration by user type", x = "User Type", y = "Mean ride duration", caption= "Motivate International Inc")+
+  scale_fill_manual(values = c("member" = "#623C7A","casual" = "#C97AFA"))
+
+#Calculating the (week days X user type) and creating the plot
+
+weekday_usertype <- bike_trips_df_clean %>% 
+  group_by(member_casual, day_of_week) %>%
+  summarise(number_of_rides = n()) %>% 
+  arrange(member_casual) %>% 
+  ggplot(aes(x = day_of_week, y = number_of_rides, fill = member_casual))+
+  geom_col(position = "dodge")+
+  labs(title = "Rides by weekday X user types", x = "Weekday", y = "Number of rides", caption= "Motivate International Inc")+
+  scale_y_continuous(labels = scales::comma)+
+  scale_fill_manual(values = c("member" = "#623C7A","casual" = "#C97AFA"))
+  
+
+```
+
+```{r}
+plot(mean_duration_plot)
+```
+
+```{r}
+plot(weekday_usertype)
+```
+
+```{r}
+#Calculating preference type of bike
+
+bike_types_users <- bike_trips_df_clean %>% 
+  group_by(member_casual, rideable_type) %>% 
+  summarise(type = n(), .groups = "drop") %>% 
+  filter(rideable_type!= "docked_bike")
+
+#Ploting the preferences
+
+bike_types <-ggplot(bike_types_users)+
+  geom_col(mapping = aes(x= member_casual , y= type, fill= rideable_type), position= "dodge")+
+  scale_y_continuous(labels = scales::comma)+
+  scale_fill_manual(values = c("classic_bike" = "#623C7A","electric_bike" = "#C97AFA"))+
+  labs(title = "Bike types ", caption= "Motivate International Inc")
+
+
+```
+
+```{r}
+plot(bike_types)
+```
+
+
+
+```{r}
+#Calculating the rides per hour 
+
+rides <- bike_trips_df_clean %>% 
+  mutate(hour = strftime(bike_trips_df_clean$started_at, "%H"))
+```
+
+```{r}
+hours <- rides %>% 
+  group_by(member_casual, hour) %>% 
+  summarise(numberofrides = n(), .groups = 'drop') %>% 
+  arrange(hour)
+  
+
+#Ploting the rides per hour
+
+dayhours <- ggplot(hours, aes(x= hour, y= numberofrides, fill= member_casual))+
+  geom_col(position= "dodge")+
+  scale_y_continuous(labels = scales::comma)+
+  scale_fill_manual(values = c("member" = "#623C7A","casual" = "#C97AFA"))+
+  labs(tittle= "Rides throughout the day", x= "Hours", y= "Rides", caption= "Motivate International Inc")
+  
+```
+
+
+```{r}
+plot(dayhours)
+```
+
+
+### Conclusion
+
+  By looking in to the plots, the differences between the user types stand out.  
+  
+* The casual users take more time in their rides,ride more often in the weekends and opt for electric bikes.  
+* The members are quicker in their rides, ride on business days and opt for classic bikes.  
+* Members have 2 peaks of rides in the day hours, that match with the work start and end hours.  
+  
+## Act  
+  
+  After analysing the plots, there are few recommendations that i can do.  
+  
+* In order to turn casual users in to annual members, the company have 2 choices, 1- convince the casual users to use the bikes just like the annual members,  
+  2- understand that casual and members use the bikes in different ways, the company could create a new annual plan lined up to the casual uses, the plan should be  
+  cheaper, because casual use the bikes less than members, and it could be use limited, like have a limit of uses per week.  
+* In social medias, the company should focus on show the casual users the benefits of the annual plan.
+
+
+
+
+
+
+
+
+
+
+
+
+
